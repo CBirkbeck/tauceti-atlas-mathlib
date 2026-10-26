@@ -3538,8 +3538,8 @@
     }
   ],
   "sourceDocuments": 296,
-  "htmlBytes": 34646545,
-  "htmlSha256": "1a44cb3f4c1a89c0d8bda77c393c62ea4158d5ba476501dbfa3bb4cf37fe402c",
+  "htmlBytes": 34646634,
+  "htmlSha256": "90fd7dd8bee774146e316685ed28b58a6d6b216f96352f310b4d2b1aaaf04d89",
   "networkDependencies": 0,
   "localProgressOverridesIncluded": false,
   "assets": {
@@ -3548,7 +3548,7 @@
     "vendor/d3.v5.15.0.min.js": "9b442622c05770e322113466a53dea836210fe2d2a6b3240da68821f33a64b56",
     "vendor/katex.v0.16.28.min.js": "5e4f3b03c66a3360fe5c070da797900dd74437f58f23957443f4cbd26149f74e",
     "src/markdown.js": "506d454a15eb4447dccea27d2a7d24555c8b190489bb1a79c1b72d79b74ddcc5",
-    "src/universe.js": "7ffca36cc877a49f0ddcae08772520106ae7e848b2cad8b5a3b4d91088e4e69a",
+    "src/universe.js": "3a147771b06c4b8307579eefd1d8ba0cc700fbceeeaf960f4864547275fd932d",
     "src/graph.js": "f0b7724d7e7410ac3512f03d3a113c72efde10f455b02fbcfef45cfa118d5c85",
     "src/camera.js": "a3a15b51c943a8dcee0e2d7a922700c11ce4c6f1de545ddc5da8fdfd2150a460",
     "src/progress.js": "ce2bcb7443a4bb483c4fc6cc08a4c0638e0453e085c8d4856e066773468f5c33",
