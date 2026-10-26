@@ -5,10 +5,19 @@ live atlas: Mathlib is the small sun at the centre, inside an empty circle, with
 the sun and the Mathlib disk opens a little; click it and the disk opens fully round the sun. Click the sun again and the
 disk closes back into the live view.
 
-The disk is divided into the same arXiv areas as the map. On it are Mathlib's key definitions and theorems: those its own
-catalogues name (`docs/overview.yaml`, `docs/undergrad.yaml`, `docs/100.yaml`, `docs/1000.yaml`), and, as the camera closes in, the main
-definitions and results its files list in their headers. Each lies as far from the centre as the number of Mathlib
-definitions needed to state and prove it.
+The disk is divided into the same arXiv areas as the map. On it are Mathlib's key definitions and theorems:
+- the 913 its own catalogues name (`docs/overview.yaml`, `docs/undergrad.yaml`, `docs/100.yaml`, `docs/1000.yaml`), titled in their words;
+- as the camera closes in, 8,016 main definitions and results that its files list in their headers.
+
+Each item lies as far from the centre as the number of Mathlib definitions needed to state and prove it, on a logarithmic
+scale. The deepest declaration of Mathlib needs 6,564. Clicking an item opens its statement, what it needs, and links to
+Mathlib's docs and source.
+
+Mathlib has material in five areas that have no roadmaps yet: Rings and Algebras, General Topology, Dynamical Systems,
+Spectral Theory and Statistics Theory. They are on the map everywhere: a sector each in the disk, and a narrow empty
+place each outside. Those places make the other sectors outside about 5.5% narrower than on the live atlas.
+
+The disk is a first pass. Where Mathlib's folders go (`data/mathlib-areas.json`) is a table to edit.
 
 **[Open the experiment](https://cbirkbeck.github.io/tauceti-atlas-mathlib/)** · [Tau Ceti's roadmaps alone](https://cbirkbeck.github.io/tauceti-atlas-mathlib/tauceti/)
 

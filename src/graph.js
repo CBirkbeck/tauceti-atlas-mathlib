@@ -521,7 +521,12 @@
 
     // A click on the sun: open the disk and frame it, or close it and return to the opening view.
     toggleDisk() {
-      if (this.diskState === 'open') { this.setDisk('closed'); this.fitAll(true); }
+      if (this.diskState === 'open') {
+        // A Mathlib item's panel closes with the disk: the item is no longer on the map.
+        const selected = this.selectedId && this.universe.byId.get(this.selectedId);
+        if (selected && selected.level === 'mathlib') this.select(null, true);
+        this.setDisk('closed'); this.fitAll(true);
+      }
       else { this.setDisk('open'); this.zoomToDisk(true); }
       return this;
     }

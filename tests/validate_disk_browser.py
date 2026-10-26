@@ -81,7 +81,9 @@ with sync_playwright() as p:
                and opened['label'] == 'Close the Mathlib disk')
         record(scope + ': the sun keeps its name over the open disk', page.evaluate("() => !!document.querySelector('.tau-label-core')"))
         if scope == 'Phone':
-            page.evaluate("""() => { const g = TauExplorer.graph, d = g.universe.disk, k = g.transform.k * 3, x = d.outer * .45, y = -d.outer * .2;
+            # Closer in round the most important landmark, wherever the page's turn of the disk has put it.
+            page.evaluate("""() => { const g = TauExplorer.graph, k = g.transform.k * 3,
+              { x, y } = g.universe.disk.items.filter(i => i.tier === 1).sort((a, b) => b.importance - a.importance)[0];
               g.travel(d3.zoomIdentity.translate(g.width / 2 - x * k, g.height / 2 - y * k).scale(k), false); }""")
             settle(page)
             record('Phone: closer in, the landmarks are named', page.evaluate("() => document.querySelectorAll('.tau-label-mathlib').length") >= 3)
@@ -115,6 +117,7 @@ with sync_playwright() as p:
         closed = page.evaluate(STATE)
         record(scope + ': a second click closes the disk and returns to the opening view', closed['state'] == 'closed' and closed['display'] == 'none'
                and closed['items'] == 0 and closed['atOverview'])
+        record(scope + ': a Mathlib item\'s panel closes with the disk', page.evaluate("() => TauExplorer.getState().selected === null && document.getElementById('inspector').hidden"))
         if scope == 'Desktop':
             page.focus('.tau-core-hit')
             page.keyboard.press('Enter')

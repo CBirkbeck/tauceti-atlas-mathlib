@@ -3538,8 +3538,8 @@
     }
   ],
   "sourceDocuments": 296,
-  "htmlBytes": 34639125,
-  "htmlSha256": "d8c035967cec2c344908e23185d0d0ad370d7cc8fbdd64802e9111fc6acdcf5d",
+  "htmlBytes": 34639393,
+  "htmlSha256": "71969ab3ddabc85fa84976835965797adbc475598f71ce8fc4db0b38474e1cdd",
   "networkDependencies": 0,
   "localProgressOverridesIncluded": false,
   "assets": {
@@ -3549,7 +3549,7 @@
     "vendor/katex.v0.16.28.min.js": "5e4f3b03c66a3360fe5c070da797900dd74437f58f23957443f4cbd26149f74e",
     "src/markdown.js": "506d454a15eb4447dccea27d2a7d24555c8b190489bb1a79c1b72d79b74ddcc5",
     "src/universe.js": "67eba2d2ee3cbc5a887a8292578dd8f2ae509cfe70454f54851f89eefb55bf17",
-    "src/graph.js": "166562f13b726f52497ec53caa40e219c4eef4cb632fa18f7983ee706243a875",
+    "src/graph.js": "19a5ca8992aa46287a22e192ea399c3878416020d8304126436e5b49835cd664",
     "src/camera.js": "a3a15b51c943a8dcee0e2d7a922700c11ce4c6f1de545ddc5da8fdfd2150a460",
     "src/progress.js": "ce2bcb7443a4bb483c4fc6cc08a4c0638e0453e085c8d4856e066773468f5c33",
     "src/landmarks.js": "0785c99a8e93d71eeb7bfb8a17da1fa07da8d45f0502e5098ef26b853f06d47a",

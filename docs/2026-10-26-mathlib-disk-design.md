@@ -11,8 +11,8 @@ continue the mathematics that the disk shows.
 ## Behaviour (the user's words: "the sun and empty disk we have now is there…")
 
 - **At rest** the map is the live view: the small sun and the empty circle, the roadmaps where they are.
-- **Hovering over the sun** opens the disk a little: it grows out of the sun to about a third of its radius, faintly,
-  and closes again when the pointer leaves.
+- **Hovering over the sun** opens the disk a little: it grows out of the sun to 0.42 of its radius, faintly, and
+  closes again when the pointer leaves.
 - **Clicking the sun** opens the disk fully round it, and the camera frames the disk. The sun stays at the centre.
 - **Clicking the sun again** closes the disk into the sun, and the camera returns to the opening view.
 - On a touch screen a tap opens or closes the disk; there is no hover. The sun answers Enter and Space from the
@@ -27,9 +27,15 @@ continue the mathematics that the disk shows.
   - Each category's share of the disk follows how much of Mathlib's key material lies in it. Outside, the shares stay
     as they are (by roadmaps), so the outer map is unchanged.
   - The disk is turned to line its categories up as well as one turn can with the same categories outside.
-  - A category that has Mathlib material but no roadmaps (Rings and Algebras, General Topology, Dynamical Systems, …)
-    joins the map's list of categories everywhere, as the user asked. It has a sector in the disk, but none outside
-    until a roadmap arrives, because sectors outside are drawn only for galaxies with roadmaps.
+  - A category that has Mathlib material but no roadmaps joins the map's list of categories everywhere, as the user
+    asked. At the pinned commit these are Rings and Algebras, General Topology, Dynamical Systems, Spectral Theory and
+    Statistics Theory.
+    - It has a sector in the disk.
+    - Outside, it keeps a narrow place in the order (as a galaxy with no roadmaps would: about 0.8°), where its roadmaps
+      will go. Nothing is drawn there until one arrives.
+    - Those five places narrow the other sectors outside by about 5.5% and move their centres by up to 8° (median 3°).
+      So the closed view is the live one with five empty slivers. Leaving them out outside is a one-line change to
+      `build.py` (`also`).
 - **Which items.**
   - The landmarks are the declarations that Mathlib's own catalogues name: `docs/overview.yaml`, `docs/undergrad.yaml`,
     `docs/100.yaml` and `docs/1000.yaml`. Each is titled with its catalogue's words.
@@ -44,8 +50,10 @@ continue the mathematics that the disk shows.
     `Mathlib.Util.…`) do not count.
   - The scale is logarithmic, from the sun outwards.
   - An item's panel also gives the number needed to state it alone, and the longest chain of definitions beneath it.
-- **Placement within a sector.** Items keep together by module, in module order across the sector, and are spread along
-  their arc so that none hides another.
+- **Placement within a sector.** Each module has a wedge of its sector, in module order, as wide as its share of the
+  sector's items. An item starts at its distance and at an angle in its module's wedge that its name gives. It then moves
+  out on a spiral round that point until it is 6 units clear of the items placed before it: the landmarks first, then
+  by importance.
 - **Drawing.** The disk is drawn flat, with no gradients or glows; the sun and the pull requests' stars remain the only
   ones. It has a faint fill and faint rules between its areas.
   - The disk and its area names show from the opening view of the disk.
