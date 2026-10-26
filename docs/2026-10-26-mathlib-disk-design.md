@@ -57,8 +57,11 @@ continue the mathematics that the disk shows.
 - **Drawing.** The disk is drawn flat, with no gradients or glows; the sun and the pull requests' stars remain the only
   ones. It has a faint fill and faint rules between its areas.
   - The disk and its area names show from the opening view of the disk.
-  - The landmarks show as small points that keep their size on screen. Their names appear as the label system finds
-    them room, the most important first.
+  - The items are stars, as the landed pull requests are: a near-white core in a faint halo that fades (two flat strokes),
+    keeping its size on screen. A definition burns blue-white and a theorem pale gold. A landmark is brighter the more
+    important it is, and a header's item is faint. None twinkles: on the atlas a twinkling star is an open pull
+    request (the user, 2026-10-26: "make the blue and yellow balls into something that looks more like the stars").
+  - The landmarks' names appear as the label system finds them room, the most important first.
   - Header items appear from a closer zoom.
   - Clicking an item opens its panel: its statement as Lean prints it, its docstring, the three measures above, its
     module, and links to Mathlib's docs and source.

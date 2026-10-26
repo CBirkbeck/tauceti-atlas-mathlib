@@ -396,7 +396,7 @@ const diskItems=new Map((DATA.mathlibDisk?.items||[]).map(row=>[row.id,row]));
 const CATALOGUES={overview:"Mathlib's overview",undergrad:"Mathlib's undergraduate list",'100':"Freek Wiedijk's 100 theorems",'1000':'The 1000+ theorems list'};
 function renderDiskItem(box,r){const disk=DATA.mathlibDisk,sector=disk.sectors.find(s=>s.id===r.s),theorem=['theorem','lemma'].includes(r.k);
  $('selection-kind').textContent=theorem?'Mathlib theorem':r.k==='instance'?'Mathlib instance':'Mathlib definition';
- detailHeader(box,r.t,sector?sector.label:'Mathlib',theorem?'#d9c391':'#6f9fcf');
+ detailHeader(box,r.t,sector?sector.label:'Mathlib',theorem?'#f0c46e':'#7aa3ff');
  if(r.t!==r.n)box.append(el('code','disk-name',r.n));
  if(r.sig)box.append(el('pre','disk-signature',r.k+' '+r.sig));
  if(r.doc){const text=el('div','md-content landmark-description');text.append(TauMarkdown.render(r.doc,{}));box.append(text);}

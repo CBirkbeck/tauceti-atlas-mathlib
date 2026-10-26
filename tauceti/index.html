@@ -1802,6 +1802,10 @@ SOFTWARE.
   // The Mathlib disk (src/universe.js) is hidden at rest, so the map is the live one: the sun and the empty circle
   // round it. Hovering over the sun opens it to DISK_PEEK of its size; a click opens it fully, and a second closes it.
   const DISK_PEEK = .42, DISK_FILL = '#9fb3c8', DISK_TIMES = { peek: 250, open: 450, closed: 350 };
+  // The disk's items are stars, as the landed pull requests are: a near-white core in a faint halo of its colour. A
+  // definition burns blue-white and a theorem pale gold; a landmark is brighter than a header's item. None twinkles:
+  // on the atlas a twinkling star is an open pull request.
+  const DISK_STAR = { definition: { core: '#eef4ff', glow: '#7aa3ff' }, theorem: { core: '#fff4dc', glow: '#f0c46e' } };
   const isDefinitionKind = kind => kind === 'definition' || kind === 'construction' || !kind;
   const planetFill = d => isDefinitionKind(d.kind) ? OCEAN : SAND;
   const nameHash = text => Array.from(String(text)).reduce((seed, character) => ((seed * 31 + character.charCodeAt(0)) >>> 0), 7);
@@ -1917,6 +1921,7 @@ SOFTWARE.
         .tau-graph .tau-core, .tau-graph .tau-galaxy-disc, .tau-graph .tau-dust, .tau-graph .tau-constellation-disc, .tau-graph .tau-figure, .tau-graph .tau-orbit, .tau-graph .tau-field, .tau-graph .tau-link, .tau-graph .tau-route, .tau-graph .tau-ring { pointer-events: none; }
         .tau-graph .tau-disk-base, .tau-graph .tau-disk-rule, .tau-graph .tau-disk-dust { pointer-events: none; }
         .tau-graph .tau-disk-dust path, .tau-graph .tau-disk-item path { fill: none; stroke-linecap: round; }
+        .tau-graph .tau-disk-item .tau-disk-ring { fill: none; pointer-events: none; }
         .tau-graph .tau-core .tau-core-hit { fill: transparent; pointer-events: all; cursor: pointer; outline: none; }
         .tau-graph .tau-core .tau-core-hit:focus-visible { stroke: rgba(240, 228, 200, .5); }
         .tau-graph .tau-disk-item { cursor: pointer; outline: none; }
@@ -2360,8 +2365,8 @@ SOFTWARE.
       return items;
     }
 
-    // Each item a dot that keeps its size on screen, growing a little as the camera closes in: a definition blue,
-    // a theorem sand, as the planets are; a landmark larger. A wide clear stroke round it takes a finger's tap.
+    // Each item a star that keeps its size on screen, growing a little as the camera closes in (DISK_STAR): a landmark
+    // brighter the more important it is, a header's item faint. A wide clear stroke round it takes a finger's tap.
     renderDiskItems(items, k, active) {
       const layer = this.diskGroup ? this.diskGroup.select('g.tau-disk-items') : null;
       if (!layer) return;
@@ -2369,16 +2374,21 @@ SOFTWARE.
       join.exit().remove();
       const enter = join.enter().append('g').attr('class', 'tau-disk-item tau-node').attr('data-node-id', d => d.id).attr('data-level', 'mathlib')
         .attr('tabindex', 0).attr('role', 'button').attr('aria-label', d => normalizeText(d.title) + (d.theorem ? '. Mathlib theorem' : '. Mathlib definition'));
-      ['tau-disk-hit', 'tau-disk-ring', 'tau-disk-dot'].forEach(name => enter.append('path').attr('class', name).attr('vector-effect', 'non-scaling-stroke')
+      ['tau-disk-hit', 'tau-disk-halo', 'tau-disk-glow', 'tau-disk-core'].forEach(name => enter.append('path').attr('class', name).attr('vector-effect', 'non-scaling-stroke')
         .attr('d', d => `M${d.x.toFixed(2)},${d.y.toFixed(2)}h0`));
+      enter.append('circle').attr('class', 'tau-disk-ring').attr('cx', d => d.x).attr('cy', d => d.y).attr('stroke', ACCENT).attr('vector-effect', 'non-scaling-stroke').attr('stroke-width', 1.5);
       enter.select('.tau-disk-hit').attr('stroke-width', 14);
-      enter.select('.tau-disk-ring').attr('stroke', ACCENT);
-      enter.select('.tau-disk-dot').attr('stroke', d => d.theorem ? SAND : OCEAN);
+      enter.selectAll('.tau-disk-halo, .tau-disk-glow').attr('stroke', d => DISK_STAR[d.theorem ? 'theorem' : 'definition'].glow);
+      enter.select('.tau-disk-core').attr('stroke', d => DISK_STAR[d.theorem ? 'theorem' : 'definition'].core);
       this.bindInteractions(enter);
       const grow = this.universe.disk ? Math.max(1, Math.min(2.2, Math.sqrt(k / this.diskTransform().k))) : 1;
+      // A glow that fades: a brighter ring close round the core and a very faint one beyond, as flat strokes.
+      const core = d => (d.tier === 1 ? 2 + .1 * Math.max(0, Math.min(7, d.importance)) : 1.3) * grow * (d.id === active ? 1.25 : 1);
       const all = enter.merge(join);
-      all.select('.tau-disk-dot').attr('stroke-width', d => (d.tier === 1 ? 4.6 : 3) * grow);
-      all.select('.tau-disk-ring').attr('stroke-width', d => d.id === active ? (d.tier === 1 ? 4.6 : 3) * grow + 5 : 0);
+      all.select('.tau-disk-core').attr('stroke-width', core).attr('stroke-opacity', d => d.tier === 1 ? 1 : .8);
+      all.select('.tau-disk-glow').attr('stroke-width', d => core(d) * 2).attr('stroke-opacity', d => d.tier === 1 ? .3 : .18);
+      all.select('.tau-disk-halo').attr('stroke-width', d => core(d) * 3.4).attr('stroke-opacity', d => d.tier === 1 ? .09 : 0);
+      all.select('.tau-disk-ring').attr('r', d => (core(d) * 1.6 + 3) / k).attr('opacity', d => d.id === active || d.id === this.selectedId ? 1 : 0);
     }
 
     dustPath(points, radius) {
@@ -4840,7 +4850,7 @@ const diskItems=new Map((DATA.mathlibDisk?.items||[]).map(row=>[row.id,row]));
 const CATALOGUES={overview:"Mathlib's overview",undergrad:"Mathlib's undergraduate list",'100':"Freek Wiedijk's 100 theorems",'1000':'The 1000+ theorems list'};
 function renderDiskItem(box,r){const disk=DATA.mathlibDisk,sector=disk.sectors.find(s=>s.id===r.s),theorem=['theorem','lemma'].includes(r.k);
  $('selection-kind').textContent=theorem?'Mathlib theorem':r.k==='instance'?'Mathlib instance':'Mathlib definition';
- detailHeader(box,r.t,sector?sector.label:'Mathlib',theorem?'#d9c391':'#6f9fcf');
+ detailHeader(box,r.t,sector?sector.label:'Mathlib',theorem?'#f0c46e':'#7aa3ff');
  if(r.t!==r.n)box.append(el('code','disk-name',r.n));
  if(r.sig)box.append(el('pre','disk-signature',r.k+' '+r.sig));
  if(r.doc){const text=el('div','md-content landmark-description');text.append(TauMarkdown.render(r.doc,{}));box.append(text);}
