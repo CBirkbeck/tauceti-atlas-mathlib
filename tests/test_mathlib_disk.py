@@ -77,5 +77,94 @@ class Headers(unittest.TestCase):
         self.assertIsNone(md.resolve("span", "M.C", names, by_module))
 
 
+def write_dataset(root: Path, decls: list[tuple], edges: dict[str, list[tuple[int, int]]]) -> Path:
+    """A dataset in the extractor's format (ltb-dataset/2): decls are (name, module, kind, isProp, package)."""
+    import json
+    from array import array
+    (root / "edges").mkdir(parents=True)
+    with (root / "decls.jsonl").open("w", encoding="utf-8") as f:
+        for i, (name, module, kind, is_prop, package) in enumerate(decls):
+            f.write(json.dumps({"id": i, "name": name, "module": module, "kind": kind, "isProp": is_prop, "package": package,
+                                "scope": "project" if package == "mathlib" else "upstream", "hashes": {}}) + "\n")
+    entries = []
+    for notion, pairs in edges.items():
+        data = array("i", [x for pair in pairs for x in pair])
+        (root / "edges" / f"{notion}.bin").write_bytes(data.tobytes())
+        entries.append({"name": notion, "format": "i32le-pairs", "file": f"edges/{notion}.bin", "count": len(pairs)})
+    (root / "meta.json").write_text(json.dumps({"spec": "ltb-dataset/2", "edges": entries, "facets": [],
+                                                "library": {"commit": "c0ffee"}}), encoding="utf-8")
+    return root
+
+
+@unittest.skipUnless(md, "needs requirements-data.txt")
+class Sketches(unittest.TestCase):
+    """Counting distinct definitions without holding every closure: HyperLogLog, exact while small."""
+
+    def test_a_large_count_is_within_five_percent(self):
+        import numpy as np
+        for n in (2_000, 20_000, 200_000):
+            estimate = md.estimate(md.registers_for(np.arange(n, dtype=np.int64)))
+            self.assertLess(abs(estimate - n) / n, .05, n)
+
+    def test_merging_is_the_union(self):
+        import numpy as np
+        a, b = md.registers_for(np.arange(0, 6000, dtype=np.int64)), md.registers_for(np.arange(4000, 10_000, dtype=np.int64))
+        self.assertLess(abs(md.estimate(np.maximum(a, b)) - 10_000) / 10_000, .05)
+
+    def test_an_empty_sketch_counts_nothing(self):
+        import numpy as np
+        self.assertEqual(round(md.estimate(md.registers_for(np.arange(0, dtype=np.int64)))), 0)
+
+
+@unittest.skipUnless(md, "needs requirements-data.txt")
+class Measures(unittest.TestCase):
+    """How much of Mathlib a declaration needs: to state it, to state and prove it, and its deepest chain."""
+
+    @classmethod
+    def setUpClass(cls):
+        import tempfile
+        from evidence_core.dataset import Dataset
+        from evidence_core.graphs import Graphs
+        decls = [("A", "Mathlib.Foo.A", "definition", False, "mathlib"),              # 0, built on Nat only
+                 ("B", "Mathlib.Foo.B", "definition", False, "mathlib"),              # 1, built on A
+                 ("C", "Mathlib.Foo.C", "structure", False, "mathlib"),               # 2, built on B
+                 ("L", "Mathlib.Foo.L", "theorem", True, "mathlib"),                  # 3, about C
+                 ("T", "Mathlib.Foo.T", "theorem", True, "mathlib"),                  # 4, about A; its proof uses L and K
+                 ("Mathlib.Tactic.Ring.K", "Mathlib.Tactic.Ring.Basic", "theorem", True, "mathlib"),  # 5, about D
+                 ("D", "Mathlib.Foo.D", "definition", False, "mathlib"),              # 6, only the tactic lemma uses it
+                 ("Nat", "Init.Prelude", "inductive", False, "lean4"),                # 7, Lean's own
+                 ("E", "Mathlib.Foo.E", "definition", False, "mathlib")]              # 8, built on B and C
+        meaning = [(0, 7), (1, 0), (2, 1), (3, 2), (4, 0), (5, 6), (8, 1), (8, 2)]
+        term = meaning + [(4, 3), (4, 5)]
+        root = write_dataset(Path(tempfile.mkdtemp()) / "ds", decls, {"meaning": meaning, "statement": meaning, "term": term})
+        ds = Dataset.load(root)
+        rules = [("Mathlib.Tactic", None), ("Mathlib", "math.LO")]
+        cls.m = md.measures(ds, Graphs(ds), rules)
+        cls.id = {d.name: d.id for d in ds.decls}
+
+    def at(self, measure, name):
+        return int(getattr(self.m, measure)[self.id[name]])
+
+    def test_to_state_and_prove_counts_every_definition_beneath_its_statement_and_its_proofs_lemmas(self):
+        self.assertEqual(self.at("needed", "T"), 3)   # A from its statement; C, B from the lemma L its proof uses
+        self.assertEqual(self.at("needed", "L"), 3)
+        self.assertEqual(self.at("needed", "A"), 0)   # Lean's Nat does not count
+
+    def test_a_tactics_lemmas_and_what_only_they_use_do_not_count(self):
+        self.assertEqual(self.at("needed", "T"), 3)   # not D, which only the tactic lemma K mentions
+
+    def test_to_state_counts_only_the_statements_definitions(self):
+        self.assertEqual(self.at("stated", "T"), 1)
+        self.assertEqual(self.at("stated", "C"), 2)
+        self.assertEqual(self.at("stated", "E"), 3)   # B and C, and A beneath both, once
+
+    def test_the_deepest_chain_of_definitions(self):
+        self.assertEqual(self.at("depth", "A"), 1)
+        self.assertEqual(self.at("depth", "C"), 3)
+        self.assertEqual(self.at("depth", "E"), 4)
+        self.assertEqual(self.at("depth", "L"), 3)    # a theorem takes its statement's deepest definition
+        self.assertEqual(self.at("depth", "T"), 1)
+
+
 if __name__ == "__main__":
     unittest.main()
