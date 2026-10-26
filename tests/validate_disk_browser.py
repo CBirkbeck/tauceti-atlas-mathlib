@@ -48,6 +48,15 @@ with sync_playwright() as p:
         rest = page.evaluate(STATE)
         record(scope + ': at rest the disk is closed and the sun offers to open it', rest['state'] == 'closed' and rest['display'] == 'none'
                and rest['items'] == 0 and rest['label'] == 'Open the Mathlib disk' and rest['atOverview'])
+        if scope == 'Desktop':
+            record('At rest, a sector with no roadmaps yet is named faintly with its identifier', page.evaluate("""() => {
+              const names = [...document.querySelectorAll('.tau-label-emptysector')].map(l => l.textContent);
+              return TauExplorer.getUniverse().emptySectors.length > 0 && names.some(n => n.includes('RINGS AND ALGEBRAS') && n.includes('math.RA')); }"""))
+        record(scope + ': each sector\'s tint reaches the lines either side of it, with no empty strip along them', page.evaluate("""() => {
+          const u = TauExplorer.getUniverse(), rules = u.guides.rules.map(r => r.angle), near = a => rules.some(r => Math.abs(Math.atan2(Math.sin(a - r), Math.cos(a - r))) < 1e-6);
+          return u.galaxies.every(g => near(g.b0) && near(g.b1)); }"""))
+        record(scope + ': every sector starts where the disk ends', page.evaluate("""() => {
+          const u = TauExplorer.getUniverse(); return u.galaxies.every(g => g.r0 === u.disk.outer); }"""))
         record(scope + ': the map\'s sector rules start where the live map\'s do', page.evaluate("""() => {
           const g = TauExplorer.graph, inner = g.universe.guides.inner;
           return [...document.querySelectorAll('line.tau-sector-rule')].every(l => Math.abs(Math.hypot(+l.getAttribute('x1'), +l.getAttribute('y1')) - inner) < 1); }"""))
@@ -80,6 +89,8 @@ with sync_playwright() as p:
                and opened['transform'] == 'scale(1)' and opened['items'] >= 100 and opened['sectors'] >= least[0] and opened['names'] >= least[1]
                and opened['label'] == 'Close the Mathlib disk')
         record(scope + ': the sun keeps its name over the open disk', page.evaluate("() => !!document.querySelector('.tau-label-core')"))
+        record(scope + ': the disk names its categories with their identifiers', page.evaluate("""() =>
+          [...document.querySelectorAll('.tau-label-disksector')].some(l => / math\\.[A-Z]{2}$/.test(l.textContent.replace(/([A-Z])math/, '$1 math'))) """))
         if scope == 'Phone':
             # Closer in round the most important landmark, wherever the page's turn of the disk has put it.
             page.evaluate("""() => { const g = TauExplorer.graph, k = g.transform.k * 3,

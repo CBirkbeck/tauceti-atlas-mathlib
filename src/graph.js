@@ -146,6 +146,7 @@
         .tau-graph .tau-label-mathlib text { fill: #b9c5d0; font-weight: 500; stroke-width: 2.5px; }
         .tau-graph .tau-label-mathlib.is-landmark text { fill: #e1e7ec; }
         .tau-graph .tau-label-disksector text { fill: #93a4b5; font-weight: 600; letter-spacing: 1.1px; stroke-width: 3px; }
+        .tau-graph .tau-label-emptysector text { fill: #6f7c8a; font-weight: 600; letter-spacing: 1.2px; stroke-width: 3px; }
         .tau-graph .tau-label-core text { fill: #efe3c8; font-weight: 600; letter-spacing: 2.5px; text-transform: uppercase; stroke-width: 3px; }
         .tau-label-galaxy text { fill: #b3bec9; font-weight: 500; letter-spacing: .2px; stroke-width: 2.5px; }
         .tau-label-field text, .tau-graph .tau-label-galaxy.is-field text { fill: #d3dae1; font-weight: 600; letter-spacing: 1.3px; stroke-width: 3px; }
@@ -570,7 +571,9 @@
         const spots = [.95, .88, .8, .7, .6].map(f => ({ x: Math.cos(middle) * disk.outer * f, y: Math.sin(middle) * disk.outer * f + 3.5 / k, above: false, anchor: 'middle' }))
           .filter(spot => centred(spot.x, spot.y));
         if (!spots.length) return;
-        labels.push({ id: 'disksector:' + s.id, nodeId: s.id, kind: 'disksector', x: spots[0].x, y: spots[0].y, lines: [(s.short || s.label).toUpperCase()],
+        // A category is named with its arXiv identifier (math.RA), as on the map; a finer area of one by its name.
+        const named = [(s.short || s.label).toUpperCase(), ...(s.sectorId === s.code ? [s.code] : [])];
+        labels.push({ id: 'disksector:' + s.id, nodeId: s.id, kind: 'disksector', x: spots[0].x, y: spots[0].y, lines: named,
           font: T.small ? 9 : 10, anchor: 'middle', above: false, priority: 95 + Math.min(20, s.items / 50), active: false, alternatives: spots.slice(1) });
       });
       const chosen = d => d.id === this.selectedId ? 2 : d.id === active ? 1 : 0;
@@ -760,6 +763,15 @@
         labels.push({ id: 'field:' + field.id, nodeId: field.id, kind: 'field', x: (along || spots)[0].x, y: (along || spots)[0].y, lines, font: T.small ? 10 : 11,
           anchor: along ? along[0].anchor : 'middle', above: along ? along[0].above : true,
           priority: 150 + field.count, active: active === field.id, members: new Set(field.galaxyIds), alternatives: (along || spots).slice(1) });
+      });
+      // A sector with no roadmaps yet is named faintly along its middle, with its identifier: Mathlib's disk has
+      // material there (the Mathlib-only areas), and roadmaps will come.
+      (universe.emptySectors || []).forEach(s => {
+        const along = [...edgeSpots((s.a0 + s.a1) / 2, s.spots[0] ? Math.hypot(s.spots[0].x, s.spots[0].y) : 0, 0), ...s.spots].filter(spot => intersects(spot.x, spot.y, 60 / k));
+        if (!along.length || (s.a1 - s.a0) * Math.hypot(along[0].x, along[0].y) * k < 18) return;
+        const lines = T.small ? [(s.short || s.label).toUpperCase()] : [(s.short || s.label).toUpperCase(), ...(s.code ? [s.code] : [])];
+        labels.push({ id: 'empty:' + s.id, nodeId: s.id, kind: 'emptysector', x: along[0].x, y: along[0].y, lines, font: T.small ? 9.5 : 10,
+          anchor: along[0].anchor, above: along[0].above, priority: 70, active: false, alternatives: along.slice(1) });
       });
       const framed = new Map();
       galaxies.forEach(galaxy => {
