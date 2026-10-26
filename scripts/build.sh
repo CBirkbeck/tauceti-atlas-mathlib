@@ -33,6 +33,10 @@ git -C "$here" ls-files -z --others --exclude-standard -- src scripts data tests
 done
 [ "${1:-}" = "--overlay" ] && { echo "laid over tauceti-explorer ${commit:0:12} in $up"; exit 0; }
 
+# The proposed roadmaps' READMEs are a cache tauceti-explorer keeps out of its repository: start from the local clone's,
+# and read what it lacks at the commits UPSTREAM records (scripts/fill_readmes.py).
+[ -e "$up/data/tauceti-prs-readmes.json" ] || cp "$live/data/tauceti-prs-readmes.json" "$up/data/" 2>/dev/null || true
+(cd "$up" && python3 scripts/fill_readmes.py)
 (cd "$up" && python3 scripts/build.py > /dev/null && python3 scripts/build.py --tauceti > /dev/null)
 mkdir -p "$here/tauceti"
 cp "$up/index.html" "$here/index.html"
