@@ -77,11 +77,15 @@ class Headers(unittest.TestCase):
         self.assertIsNone(md.resolve("span", "M.C", names, by_module))
 
 
-def write_dataset(root: Path, decls: list[tuple], edges: dict[str, list[tuple[int, int]]]) -> Path:
-    """A dataset in the extractor's format (ltb-dataset/2): decls are (name, module, kind, isProp, package)."""
+def write_dataset(root: Path, decls: list[tuple], edges: dict[str, list[tuple[int, int]]], facets: dict[str, list[dict]] | None = None) -> Path:
+    """A dataset in the extractor's format (ltb-dataset/2): decls are (name, module, kind, isProp, package); facets
+    map a facet's name to its rows."""
     import json
     from array import array
     (root / "edges").mkdir(parents=True)
+    (root / "facets").mkdir()
+    for name, rows in (facets or {}).items():
+        (root / "facets" / f"{name}.jsonl").write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
     with (root / "decls.jsonl").open("w", encoding="utf-8") as f:
         for i, (name, module, kind, is_prop, package) in enumerate(decls):
             f.write(json.dumps({"id": i, "name": name, "module": module, "kind": kind, "isProp": is_prop, "package": package,
@@ -91,7 +95,8 @@ def write_dataset(root: Path, decls: list[tuple], edges: dict[str, list[tuple[in
         data = array("i", [x for pair in pairs for x in pair])
         (root / "edges" / f"{notion}.bin").write_bytes(data.tobytes())
         entries.append({"name": notion, "format": "i32le-pairs", "file": f"edges/{notion}.bin", "count": len(pairs)})
-    (root / "meta.json").write_text(json.dumps({"spec": "ltb-dataset/2", "edges": entries, "facets": [],
+    (root / "meta.json").write_text(json.dumps({"spec": "ltb-dataset/2", "edges": entries,
+                                                "facets": [{"name": name, "file": f"facets/{name}.jsonl"} for name in facets or {}],
                                                 "library": {"commit": "c0ffee"}}), encoding="utf-8")
     return root
 
@@ -164,6 +169,74 @@ class Measures(unittest.TestCase):
         self.assertEqual(self.at("depth", "E"), 4)
         self.assertEqual(self.at("depth", "L"), 3)    # a theorem takes its statement's deepest definition
         self.assertEqual(self.at("depth", "T"), 1)
+
+
+@unittest.skipUnless(md, "needs requirements-data.txt")
+class DiskData(unittest.TestCase):
+    """data/mathlib-disk.json: the items with their words, measures and areas, and the dust."""
+
+    @classmethod
+    def setUpClass(cls):
+        import tempfile
+        from evidence_core.dataset import Dataset
+        from evidence_core.graphs import Graphs
+        from mathlib_areas import load_rules
+        decls = [("IsDedekindDomain", "Mathlib.RingTheory.Example", "class", False, "mathlib"),          # 0
+                 ("Submodule.span", "Mathlib.RingTheory.Example", "definition", False, "mathlib"),       # 1
+                 ("CompleteSpace", "Mathlib.Topology.Basic", "class", False, "mathlib"),                 # 2
+                 ("irrational_sqrt_two", "Mathlib.Data.Real.Irrational", "theorem", True, "mathlib"),     # 3
+                 ("Mathlib.Tactic.Ring.ring", "Mathlib.Tactic.Ring", "definition", False, "mathlib"),     # 4
+                 ("Real", "Mathlib.Data.Real.Basic", "structure", False, "mathlib")]                      # 5
+        edges = [(0, 1), (2, 5), (3, 5), (4, 5)]
+        long_doc = "A complete space. " + "Every Cauchy filter converges. " * 30
+        facets = {"signature": [{"decl": "IsDedekindDomain", "text": "IsDedekindDomain.{u_2} (A : Type u_2) [CommRing A] : Prop"}],
+                  "docstring": [{"decl": "CompleteSpace", "text": long_doc}],
+                  "source": [{"decl": "IsDedekindDomain", "path": "Mathlib/RingTheory/Example.lean", "start": [12, 0], "end": [14, 3], "keyword": "class"}]}
+        root = write_dataset(Path(tempfile.mkdtemp()) / "ds", decls, {"meaning": edges, "statement": edges, "term": edges}, facets)
+        ds = Dataset.load(root)
+        g = Graphs(ds)
+        rules = load_rules(ROOT / "data" / "mathlib-areas.json")
+        cls.data = md.disk_data(ds, g, md.measures(ds, g, rules), FIXTURES, rules)
+        cls.items = {item["name"]: item for item in cls.data["items"]}
+
+    def test_the_catalogues_landmarks_and_the_headers_items(self):
+        self.assertEqual({name: item["tier"] for name, item in self.items.items()},
+                         {"IsDedekindDomain": 1, "CompleteSpace": 1, "irrational_sqrt_two": 1, "Submodule.span": 2})
+
+    def test_what_the_dataset_lacks_or_the_table_leaves_out_is_dropped_and_counted(self):
+        self.assertNotIn("Mathlib.Tactic.Ring.ring", self.items)
+        self.assertEqual(self.data["dropped"]["catalogue"], 3)   # Ideal.IsMaximal, num_dvd_of_is_root, den_dvd_of_is_root
+        self.assertEqual(self.data["dropped"]["header"], 3)      # the three Ideal.* results
+        self.assertEqual(self.data["dropped"]["excluded"], 1)    # the tactic, which its header lists
+
+    def test_an_items_words_statement_and_place(self):
+        dedekind = self.items["IsDedekindDomain"]
+        self.assertEqual(dedekind["title"], "Dedekind domain")
+        self.assertEqual(dedekind["summary"], "defines a Dedekind domain as a Dedekind ring that is a domain.")
+        self.assertEqual(dedekind["signature"], "IsDedekindDomain (A : Type u_2) [CommRing A] : Prop")
+        self.assertEqual((dedekind["path"], dedekind["line"], dedekind["keyword"]), ("Mathlib/RingTheory/Example.lean", 12, "class"))
+        self.assertEqual((dedekind["area"], self.items["CompleteSpace"]["area"], self.items["irrational_sqrt_two"]["area"]),
+                         ("math.AC", "math.GN", "math.NT/analytic"))
+        self.assertEqual(dedekind["needed"], 1)
+
+    def test_a_summary_is_at_most_four_hundred_characters(self):
+        summary = self.items["CompleteSpace"]["summary"]
+        self.assertLessEqual(len(summary), 400)
+        self.assertTrue(summary.startswith("A complete space.") and summary.endswith("…"))
+
+    def test_the_file_reads_back_as_written_one_item_a_line(self):
+        import json
+        import tempfile
+        path = Path(tempfile.mkdtemp()) / "disk.json"
+        md.write(self.data, path)
+        self.assertEqual(json.loads(path.read_text(encoding="utf-8")), self.data)
+        self.assertTrue(any(line.startswith('{"name":"IsDedekindDomain"') for line in path.read_text(encoding="utf-8").splitlines()))
+
+    def test_the_dust_counts_every_definition_and_result_by_area(self):
+        dust = self.data["dust"]
+        self.assertEqual(dust["bins"], 40)
+        self.assertEqual(sum(sum(counts) for counts in dust["areas"].values()), 5)   # all but the tactic
+        self.assertTrue(all(len(counts) == 40 for counts in dust["areas"].values()))
 
 
 if __name__ == "__main__":

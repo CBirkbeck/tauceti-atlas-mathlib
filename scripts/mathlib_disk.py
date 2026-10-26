@@ -12,8 +12,13 @@ the page's build does not.
 """
 from __future__ import annotations
 
+import argparse
+import json
 import math
 import re
+import sys
+import time
+from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -21,7 +26,9 @@ import numpy as np
 from evidence_core.catalogs import famous_theorems, topic_tree
 from evidence_core.graphs import is_machinery
 
-from mathlib_areas import area_of
+from mathlib_areas import area_of, load_rules
+
+ROOT = Path(__file__).resolve().parents[1]
 
 # The catalogues, in the order their titles are preferred: the famous theorems' own titles before a subject tree's.
 LISTS = (("100", "100.yaml"), ("1000", "1000.yaml"))
@@ -275,3 +282,125 @@ def measures(ds, g, rules) -> Measures:
         depth[x] = (1 if concept[x] else 0) + max((int(depth[c]) for c in below(x)), default=0)
     as_array = lambda values: np.array([values.get(i, 0) for i in range(n)], dtype=np.int32)
     return Measures(needed=as_array(needed), stated=as_array(stated), depth=depth, excluded=excluded)
+
+
+# --- the data file -------------------------------------------------------------------------------------------------
+SUMMARY = 400
+BINS = 40
+MEASURE = ("needed: the distinct Mathlib definitions, structures, classes and inductive types in the closure of everything a "
+           "declaration's statement and proof refer to, the proofs of the lemmas it uses included, itself excluded; stated: "
+           "the same over its statement alone (instances gone through by their type); depth: the longest chain of definitions "
+           "beneath it, itself included when it is one. Lean's own declarations and the tactics' lemmas are not counted.")
+
+
+def clip(text: str, limit: int = SUMMARY) -> str:
+    """Whole words, at most limit characters, with an ellipsis when cut."""
+    text = " ".join(text.split())
+    if len(text) <= limit:
+        return text
+    return text[:limit - 1].rsplit(" ", 1)[0].rstrip(",;:") + "…"
+
+
+def plain_signature(text: str) -> str:
+    """A signature without its universe parameters, as the docs show it."""
+    return re.sub(r"^(\S+?)\.\{[^}]*\}", r"\1", text)
+
+
+def disk_data(ds, g, m: Measures, source: Path, rules) -> dict:
+    """The disk's items (the catalogues' landmarks, tier 1, and the headers' main declarations, tier 2) with their
+    words, measures and areas; the dust, every definition and result of the library by area and measure; and what
+    was dropped: names the dataset lacks (by catalogue or header) and those the area table leaves out."""
+    names = set(ds.by_name)
+    by_module: dict[str, list[str]] = defaultdict(list)
+    for d in ds.decls:
+        if d.is_project:
+            by_module[d.module].append(d.name)
+    dropped: Counter = Counter({"catalogue": 0, "header": 0, "excluded": 0})
+    chosen: dict[str, dict] = {}
+
+    def usable(name, kind) -> bool:
+        d = ds.by_name.get(name) if name else None
+        if d is None or not d.is_project:
+            dropped[kind] += 1
+            return False
+        if m.excluded[d.id]:
+            dropped["excluded"] += 1
+            return False
+        return True
+
+    for name, entry in catalogue_entries(source / "docs").items():
+        if usable(name, "catalogue"):
+            chosen[name] = {"tier": 1, "title": entry["title"], "catalogues": entry["catalogues"], "words": ""}
+    for module, listed in header_entries(source).items():
+        for written, words in listed:
+            name = resolve(written, module, names, by_module)
+            if name in chosen:
+                chosen[name]["words"] = chosen[name]["words"] or words
+            elif usable(name, "header"):
+                chosen[name] = {"tier": 2, "title": name, "catalogues": [], "words": words}
+    signature, docstring, located = ds.facet("signature"), ds.facet("docstring"), ds.facet("source")
+    items = []
+    for name, choice in chosen.items():
+        d = ds.by_name[name]
+        doc = ((docstring.get(name) or [{}])[0].get("text") or "").strip().split("\n\n")[0]
+        words = [choice["words"], doc] if choice["tier"] == 2 else [doc, choice["words"]]
+        where = (located.get(name) or [{}])[0]
+        items.append({"name": name, "title": choice["title"], "kind": d.kind, "keyword": where.get("keyword") or d.kind,
+                      "module": d.module, "path": where.get("path"), "line": (where.get("start") or [None])[0],
+                      "area": area_of(d.module, rules), "tier": choice["tier"], "catalogues": choice["catalogues"],
+                      "needed": int(m.needed[d.id]), "stated": int(m.stated[d.id]), "depth": int(m.depth[d.id]),
+                      "importance": round(float(g.importance[d.id]), 2),
+                      "signature": plain_signature(((signature.get(name) or [{}])[0].get("text") or "")),
+                      "summary": clip(next((w for w in words if w), ""))})
+    items.sort(key=lambda item: (item["tier"], -item["importance"], item["name"]))
+    population = [d.id for d in ds.decls if not m.excluded[d.id] and (g.concept[d.id] or g.result[d.id])]
+    top = max((int(m.needed[i]) for i in population), default=0)
+    dust: dict[str, list[int]] = {}
+    for i in population:
+        area = area_of(ds.decls[i].module, rules)
+        at = 0 if top == 0 else min(BINS - 1, int(BINS * math.log1p(int(m.needed[i])) / math.log1p(top)))
+        dust.setdefault(area, [0] * BINS)[at] += 1
+    areas: dict[str, dict] = {}
+    for item in items:
+        entry = areas.setdefault(item["area"], {"items": 0, "landmarks": 0})
+        entry["items"] += 1
+        entry["landmarks"] += item["tier"] == 1
+    return {"version": 1, "mathlib": ds.commit, "extractor": ds.producer(), "measure": MEASURE, "items": items,
+            "areas": dict(sorted(areas.items())), "dust": {"bins": BINS, "max": top, "areas": dict(sorted(dust.items()))},
+            "dropped": dict(dropped)}
+
+
+def write(data: dict, path: Path) -> None:
+    """One item per line, so that a change shows as the lines it touches."""
+    head = {key: value for key, value in data.items() if key != "items"}
+    lines = ",\n".join(json.dumps(item, ensure_ascii=False, separators=(",", ":")) for item in data["items"])
+    text = json.dumps(head, ensure_ascii=False, indent=1)
+    path.write_text(text[:-2] + ',\n "items": [\n' + lines + "\n ]\n}\n", encoding="utf-8")
+
+
+def main(argv: list[str]) -> int:
+    from evidence_core.dataset import Dataset
+    from evidence_core.graphs import Graphs
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--dataset", type=Path, required=True, help="the Mathlib dataset (an unpacked release of mathlib-dataset.yml)")
+    parser.add_argument("--source", type=Path, required=True, help="Mathlib's source at the dataset's commit")
+    parser.add_argument("--areas", type=Path, default=ROOT / "data" / "mathlib-areas.json")
+    parser.add_argument("--out", type=Path, default=ROOT / "data" / "mathlib-disk.json")
+    args = parser.parse_args(argv)
+    start = time.time()
+    ds = Dataset.load(args.dataset)
+    g = Graphs(ds)
+    rules = load_rules(args.areas)
+    print(f"{len(ds.decls):,} declarations at {ds.commit[:12]} ({time.time() - start:.0f}s)", flush=True)
+    m = measures(ds, g, rules)
+    print(f"measured ({time.time() - start:.0f}s)", flush=True)
+    data = disk_data(ds, g, m, args.source, rules)
+    write(data, args.out)
+    tiers = Counter(item["tier"] for item in data["items"])
+    print(f"{tiers[1]:,} landmarks and {tiers[2]:,} header items in {len(data['areas'])} areas; dropped {data['dropped']}; "
+          f"the deepest declaration needs {data['dust']['max']:,} ({time.time() - start:.0f}s) -> {args.out}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
