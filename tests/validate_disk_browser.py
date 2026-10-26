@@ -1,0 +1,146 @@
+#!/usr/bin/env python3
+"""Browser checks for the Mathlib disk (docs/2026-10-26-mathlib-disk-design.md): at rest the map is the live one, a
+hover over the sun opens the disk a little, a click opens it round the sun and frames it, a second click closes it
+and returns to the opening view; the keyboard and a phone's tap do the same, and reduced motion opens it at once.
+An item opens its panel. Runs on the atlas (index.html) unless given another page."""
+import json
+import sys
+from pathlib import Path
+
+from playwright.sync_api import sync_playwright
+
+REPO = Path(__file__).resolve().parents[1]
+url = next((arg for arg in sys.argv[1:] if not arg.startswith('--')), (REPO / 'index.html').as_uri())
+checks, errors = [], []
+
+
+def record(name, ok):
+    checks.append(name)
+    if not ok:
+        print(json.dumps({'failedCheck': name, 'checks': checks, 'pageErrors': errors}, indent=2))
+        raise AssertionError(name)
+
+
+SUN = """() => { const g = TauExplorer.graph, box = g.svg.node().getBoundingClientRect(), t = g.transform, c = g.universe.core;
+  return [box.left + t.x + c.x * t.k, box.top + t.y + c.y * t.k]; }"""
+STATE = """() => { const g = TauExplorer.graph, d = document.querySelector('.tau-disk');
+  return { state: g.diskState, transform: d.getAttribute('transform'), display: d.getAttribute('display'), items: document.querySelectorAll('.tau-disk-item').length,
+           sectors: document.querySelectorAll('.tau-label-disksector').length, names: document.querySelectorAll('.tau-label-mathlib').length,
+           label: document.querySelector('.tau-core-hit').getAttribute('aria-label'), k: g.transform.k, atOverview: g.atOverview() }; }"""
+FRAMED = """() => { const g = TauExplorer.graph, d = g.universe.disk, reserve = g.width < 600 ? 56 : g.height < 400 ? 24 : 0;
+  return 2 * d.outer * g.transform.k >= .7 * Math.min(g.width, g.height - reserve); }"""
+
+
+def settle(page, ms=700):
+    page.wait_for_timeout(ms)
+
+
+with sync_playwright() as p:
+    browser = p.chromium.launch()
+    for scope, options in (('Desktop', {'viewport': {'width': 1440, 'height': 900}}),
+                           ('Phone', {'viewport': {'width': 390, 'height': 844}, 'has_touch': True, 'is_mobile': True})):
+        context = browser.new_context(**options)
+        page = context.new_page()
+        page.on('pageerror', lambda error: errors.append(str(error)))
+        page.goto(url)
+        page.wait_for_function('window.TauExplorer')
+        settle(page, 1200)
+        rest = page.evaluate(STATE)
+        record(scope + ': at rest the disk is closed and the sun offers to open it', rest['state'] == 'closed' and rest['display'] == 'none'
+               and rest['items'] == 0 and rest['label'] == 'Open the Mathlib disk' and rest['atOverview'])
+        record(scope + ': the map\'s sector rules start where the live map\'s do', page.evaluate("""() => {
+          const g = TauExplorer.graph, inner = g.universe.guides.inner;
+          return [...document.querySelectorAll('line.tau-sector-rule')].every(l => Math.abs(Math.hypot(+l.getAttribute('x1'), +l.getAttribute('y1')) - inner) < 1); }"""))
+        record(scope + ': every item lies on the disk, in its sector', page.evaluate("""() => {
+          const d = TauExplorer.getUniverse().disk, sectors = new Map(d.sectors.map(s => [s.sectorId, s]));
+          return d.items.length === TauExplorer.data.mathlibDisk.items.length && d.items.every(i => {
+            const r = Math.hypot(i.x, i.y), s = sectors.get(i.sector); let a = Math.atan2(i.y, i.x);
+            while (a < s.a0 - 1e-6) a += 2 * Math.PI;
+            return r >= d.inner - 36 && r <= d.outer + 36 && a <= s.a1 + 1e-6; }); }"""))
+        sun = page.evaluate(SUN)
+        if scope == 'Desktop':
+            page.mouse.move(sun[0], sun[1])
+            settle(page)
+            peek = page.evaluate(STATE)
+            record('Hovering over the sun opens the disk a little', peek['state'] == 'peek' and peek['transform'] == 'scale(0.42)' and peek['display'] is None)
+            page.mouse.move(sun[0] + 300, sun[1] + 200)
+            settle(page)
+            gone = page.evaluate(STATE)
+            record('Leaving the sun closes it again', gone['state'] == 'closed' and gone['display'] == 'none' and gone['transform'] == 'scale(0)')
+            page.mouse.move(sun[0], sun[1])
+            page.wait_for_timeout(80)
+            page.mouse.click(sun[0], sun[1])
+        else:
+            page.touchscreen.tap(sun[0], sun[1])
+        settle(page, 1000)
+        opened = page.evaluate(STATE)
+        # A phone has room for fewer names at the disk's frame; more come as the reader zooms in.
+        least = (3, 5) if scope == 'Desktop' else (3, 0)
+        record(scope + ': a click on the sun opens the disk round it, with its landmarks and areas named', opened['state'] == 'open'
+               and opened['transform'] == 'scale(1)' and opened['items'] >= 100 and opened['sectors'] >= least[0] and opened['names'] >= least[1]
+               and opened['label'] == 'Close the Mathlib disk')
+        record(scope + ': the sun keeps its name over the open disk', page.evaluate("() => !!document.querySelector('.tau-label-core')"))
+        if scope == 'Phone':
+            page.evaluate("""() => { const g = TauExplorer.graph, d = g.universe.disk, k = g.transform.k * 3, x = d.outer * .45, y = -d.outer * .2;
+              g.travel(d3.zoomIdentity.translate(g.width / 2 - x * k, g.height / 2 - y * k).scale(k), false); }""")
+            settle(page)
+            record('Phone: closer in, the landmarks are named', page.evaluate("() => document.querySelectorAll('.tau-label-mathlib').length") >= 3)
+            page.evaluate("() => TauExplorer.graph.zoomToDisk(false)")
+            settle(page)
+        record(scope + ': the camera frames the disk, with the sun at its centre', page.evaluate(FRAMED) and not opened['atOverview'])
+        record(scope + ': the map\'s sector rules start at the disk\'s rim while it is open', page.evaluate("""() => {
+          const g = TauExplorer.graph, outer = g.universe.disk.outer;
+          return [...document.querySelectorAll('line.tau-sector-rule')].every(l => Math.hypot(+l.getAttribute('x1'), +l.getAttribute('y1')) >= outer - 1); }"""))
+        if scope == 'Desktop':
+            before = page.evaluate("() => { const g = TauExplorer.graph, t = g.transform; return [(g.width / 2 - t.x) / t.k, (g.height / 2 - t.y) / t.k]; }")
+            page.evaluate("() => { const l = document.querySelector('.tau-label-mathlib.is-landmark rect'); l.dispatchEvent(new MouseEvent('click', {bubbles: true})); }")
+            settle(page, 900)
+            panel = page.evaluate("""() => { const s = TauExplorer.getState(), item = TauExplorer.data.mathlibDisk.items.find(i => i.id === s.selected),
+              box = document.getElementById('inspector-content'), links = [...box.querySelectorAll('a.topic-link')].map(a => a.href);
+              return { item: !!item, kind: document.getElementById('selection-kind').textContent, title: box.querySelector('.detail-title').textContent,
+                       expected: item && item.t, signature: !!box.querySelector('pre.disk-signature'), stats: box.querySelectorAll('.detail-stats > div').length,
+                       docs: links.some(h => h.startsWith('https://leanprover-community.github.io/mathlib4_docs/Mathlib/') && h.includes('.html#')),
+                       source: links.some(h => h.startsWith('https://github.com/leanprover-community/mathlib4/blob/' + TauExplorer.data.mathlibDisk.commit + '/Mathlib/')),
+                       state: TauExplorer.graph.diskState }; }""")
+            record('A landmark\'s name opens its panel: statement, measures, docs and source', panel['item'] and panel['kind'].startswith('Mathlib ')
+                   and panel['title'] and panel['signature'] and panel['stats'] == 3 and panel['docs'] and panel['source'] and panel['state'] == 'open')
+            after = page.evaluate("() => { const g = TauExplorer.graph, t = g.transform; return [(g.width / 2 - t.x) / t.k, (g.height / 2 - t.y) / t.k]; }")
+            record('The panel opening beside the chart keeps the reader\'s place in the disk', abs(after[0] - before[0]) < 2 and abs(after[1] - before[1]) < 2)
+            sun = page.evaluate(SUN)
+            page.mouse.click(sun[0], sun[1])
+        else:
+            sun = page.evaluate(SUN)
+            page.touchscreen.tap(sun[0], sun[1])
+        settle(page, 1000)
+        closed = page.evaluate(STATE)
+        record(scope + ': a second click closes the disk and returns to the opening view', closed['state'] == 'closed' and closed['display'] == 'none'
+               and closed['items'] == 0 and closed['atOverview'])
+        if scope == 'Desktop':
+            page.focus('.tau-core-hit')
+            page.keyboard.press('Enter')
+            settle(page, 1000)
+            keyed = page.evaluate(STATE)
+            page.keyboard.press('Enter')
+            settle(page, 1000)
+            record('Enter on the sun opens the disk and Enter again closes it', keyed['state'] == 'open' and page.evaluate(STATE)['state'] == 'closed')
+            sun = page.evaluate(SUN)
+            page.mouse.move(sun[0], sun[1])
+            page.wait_for_timeout(60)
+            page.mouse.click(sun[0], sun[1])
+            settle(page, 1000)
+            quick = page.evaluate(STATE)
+            record('A click while the disk is still opening a little ends with it open', quick['state'] == 'open' and quick['transform'] == 'scale(1)')
+        context.close()
+    context = browser.new_context(viewport={'width': 1440, 'height': 900}, reduced_motion='reduce')
+    page = context.new_page()
+    page.on('pageerror', lambda error: errors.append(str(error)))
+    page.goto(url)
+    page.wait_for_function('window.TauExplorer')
+    settle(page, 1200)
+    page.evaluate("() => TauExplorer.graph.toggleDisk()")
+    still = page.evaluate(STATE)
+    record('Under reduced motion the disk opens at once', still['state'] == 'open' and still['transform'] == 'scale(1)' and still['display'] is None)
+    context.close()
+    browser.close()
+record('No page errors', not errors)
+print(json.dumps({'checks': len(checks), 'passed': True}, indent=2))

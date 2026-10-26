@@ -47,6 +47,21 @@ class Catalogues(unittest.TestCase):
 
 
 @unittest.skipUnless(md, "needs requirements-data.txt")
+class PlainTitles(unittest.TestCase):
+    """A catalogue's TeX ($\\Z/n\\Z$) becomes plain Unicode, so that a label on the map reads as its panel does."""
+
+    def test_tex_in_a_title_becomes_unicode(self):
+        for tex, plain in (("$\\Z/n\\Z$ and its invertible elements", "ℤ/nℤ and its invertible elements"),
+                           ("$L^p$ space", "Lᵖ space"), ("Hensel's lemma (for $\\mathbb{Z}_p$)", "Hensel's lemma (for ℤₚ)"),
+                           ("$A[{X_i}]$ is a UFD when $A$ is a UFD", "A[Xᵢ] is a UFD when A is a UFD"),
+                           ("Norms $\\lVert\\cdot\\rVert_p$ on $\\R^n$ and $\\C^n$", "Norms ‖·‖ₚ on ℝⁿ and ℂⁿ"),
+                           ("Fourier transforms on $\\mathcal{S}(\\R^d)$", "Fourier transforms on 𝒮(ℝᵈ)"),
+                           ("$\\varepsilon$-NFA", "ε-NFA"), ("Multiplication by a function $C^\\infty$ of slow growth", "Multiplication by a function C^∞ of slow growth"),
+                           ("Euler's totient function ($\\varphi$)", "Euler's totient function (φ)"), ("Group", "Group")):
+            self.assertEqual(md.plain_tex(tex), plain)
+
+
+@unittest.skipUnless(md, "needs requirements-data.txt")
 class Headers(unittest.TestCase):
     """The main definitions and results a file's header lists, with its words for each."""
 

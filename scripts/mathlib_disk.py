@@ -40,8 +40,33 @@ LEADING_NAME = re.compile(r"\s*`([^`]+)`\s*(?:,\s*(?:and\s+|or\s+)?|and\s+|or\s+
 NAME = re.compile(r"[^\s`,:()\[\]{}]+")
 
 
+TEX = {r"\Z": "ℤ", r"\Q": "ℚ", r"\R": "ℝ", r"\C": "ℂ", r"\N": "ℕ", r"\varphi": "φ", r"\phi": "φ", r"\varepsilon": "ε",
+       r"\epsilon": "ε", r"\pi": "π", r"\zeta": "ζ", r"\lambda": "λ", r"\mu": "μ", r"\sigma": "σ", r"\ell": "ℓ",
+       r"\infty": "∞", r"\cdot": "·", r"\lVert": "‖", r"\rVert": "‖", r"\|": "‖", r"\to": "→", r"\le": "≤", r"\ge": "≥"}
+BLACKBOARD = {"Z": "ℤ", "Q": "ℚ", "R": "ℝ", "C": "ℂ", "N": "ℕ", "F": "𝔽", "K": "𝕂", "A": "𝔸", "P": "ℙ"}
+CALLIGRAPHIC = {"S": "𝒮", "L": "ℒ", "O": "𝒪", "F": "ℱ", "C": "𝒞", "H": "ℋ"}
+SUPERSCRIPT = dict(zip("0123456789ndkpimx+-", "⁰¹²³⁴⁵⁶⁷⁸⁹ⁿᵈᵏᵖⁱᵐˣ⁺⁻"))
+SUBSCRIPT = dict(zip("0123456789pinkjmx", "₀₁₂₃₄₅₆₇₈₉ₚᵢₙₖⱼₘₓ"))
+
+
+def plain_tex(text: str) -> str:
+    """The TeX of a catalogue's title ($\\Z/n\\Z$, $L^p$) as plain Unicode (ℤ/nℤ, Lᵖ): a label on the map cannot typeset."""
+    def maths(m: re.Match) -> str:
+        s = m.group(1)
+        s = re.sub(r"\\mathbb\{(\w)\}", lambda b: BLACKBOARD.get(b.group(1), b.group(1)), s)
+        s = re.sub(r"\\mathcal\{(\w)\}", lambda c: CALLIGRAPHIC.get(c.group(1), c.group(1)), s)
+        s = re.sub(r"\\math(?:rm|bf|it|sf)\{([^}]*)\}", r"\1", s)
+        for macro, symbol in sorted(TEX.items(), key=lambda item: -len(item[0])):
+            s = re.sub(re.escape(macro) + r"(?![A-Za-z])", symbol, s)
+        s = s.replace("{", "").replace("}", "")
+        s = re.sub(r"\^(\S)", lambda u: SUPERSCRIPT.get(u.group(1), "^" + u.group(1)), s)
+        return re.sub(r"_(\S)", lambda d: SUBSCRIPT.get(d.group(1), "_" + d.group(1)), s)
+    return re.sub(r"\$([^$]*)\$", maths, text)
+
+
 def _title(text: str) -> str:
     """A subject tree's leaves are lower case ("complete metric space"): the first letter goes up."""
+    text = plain_tex(text)
     return text[:1].upper() + text[1:] if text[:1].islower() else text
 
 
@@ -53,7 +78,8 @@ def catalogue_entries(docs: Path) -> dict[str, dict]:
 
     def add(name: str, title: str, where: list[str], rank: int) -> None:
         entry = found.setdefault(name, {"title": title, "catalogues": [], "rank": rank})
-        entry["catalogues"].append(where)
+        if where not in entry["catalogues"]:
+            entry["catalogues"].append(where)
         if rank < entry["rank"]:
             entry["title"], entry["rank"] = title, rank
 
@@ -61,12 +87,12 @@ def catalogue_entries(docs: Path) -> dict[str, dict]:
         if (docs / file).exists():
             for entry in famous_theorems(docs / file):
                 for name in entry.decls:
-                    add(name, entry.title, [key, entry.title], rank)
+                    add(name, plain_tex(entry.title), [key, plain_tex(entry.title)], rank)
 
     def walk(topic, path: list[str], key: str, rank: int) -> None:
         for entry in topic.entries:
             for name in entry.decls:
-                add(name, _title(entry.title), [key, " / ".join(path)], rank)
+                add(name, _title(entry.title), [key, plain_tex(" / ".join(path))], rank)
         for child in topic.children:
             walk(child, path + [child.title], key, rank)
 
