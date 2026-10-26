@@ -1,0 +1,5 @@
+{
+  "mathlib": "2cabef97b63d3275776b8b060d802de6a6fa1055",
+  "toolchain": "leanprover/lean4:v4.36.0-rc1",
+  "basis": "The Mathlib commit in Tau Ceti's lake-manifest.json at b257e0ff255355b2b692c1311d061d2b4dc84e53, the commit the Tau Ceti review site showed on 2026-10-26."
+}
