@@ -90,6 +90,12 @@ with sync_playwright() as p:
             page.evaluate("() => TauExplorer.graph.zoomToDisk(false)")
             settle(page)
         record(scope + ': the camera frames the disk, with the sun at its centre', page.evaluate(FRAMED) and not opened['atOverview'])
+        # One division for the disk and the map (the user, 2026-10-26): the disk's slices are the map's sectors.
+        record(scope + ': the disk\'s dividing lines run on from the map\'s, one for one', page.evaluate("""() => {
+          const angle = l => Math.atan2(+l.getAttribute('y2'), +l.getAttribute('x2'));
+          const disk = [...document.querySelectorAll('line.tau-disk-rule')].map(angle).sort((a, b) => a - b);
+          const map = [...document.querySelectorAll('line.tau-sector-rule')].map(angle).sort((a, b) => a - b);
+          return disk.length > 10 && disk.length === map.length && disk.every((a, i) => Math.abs(a - map[i]) < 1e-3); }"""))
         record(scope + ': the map\'s sector rules start at the disk\'s rim while it is open', page.evaluate("""() => {
           const g = TauExplorer.graph, outer = g.universe.disk.outer;
           return [...document.querySelectorAll('line.tau-sector-rule')].every(l => Math.hypot(+l.getAttribute('x1'), +l.getAttribute('y1')) >= outer - 1); }"""))

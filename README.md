@@ -13,9 +13,11 @@ Each item lies as far from the centre as the number of Mathlib definitions neede
 scale. The deepest declaration of Mathlib needs 6,564. Clicking an item opens its statement, what it needs, and links to
 Mathlib's docs and source.
 
-Mathlib has material in five areas that have no roadmaps yet: Rings and Algebras, General Topology, Dynamical Systems,
-Spectral Theory and Statistics Theory. They are on the map everywhere: a sector each in the disk, and a narrow empty
-place each outside. Those places make the other sectors outside about 5.5% narrower than on the live atlas.
+The disk and the map share one division: the disk's slices are the map's sectors, and each sector's share counts its
+roadmaps and Mathlib's items in it, half each, so a dividing line runs straight from the sun to the map's edge. Mathlib
+has material in five areas that have no roadmaps yet: Rings and Algebras, General Topology, Dynamical Systems, Spectral
+Theory and Statistics Theory. Their slices are on the map, empty outside until roadmaps come. So the map's sectors
+differ from the live atlas's: number theory's narrow, and algebra, topology and analysis widen.
 
 The disk is a first pass. Where Mathlib's folders go (`data/mathlib-areas.json`) is a table to edit.
 

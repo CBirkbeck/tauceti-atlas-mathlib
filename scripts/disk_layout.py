@@ -2,9 +2,9 @@
 scripts/mathlib_disk.py).
 
 The disk fills the empty circle round the sun, from DISK_INNER (outside the corona) to DISK_OUTER (inside zone 0, where
-the roadmaps begin). It is divided as the map is, by arXiv category and finer area, in the map's order round the circle;
-each sector's share grows with its items (as a galaxy's grows with its roadmaps, scripts/arxiv_groups.py), and the
-whole division is turned to line up with the map's sectors as well as one turn can. An item lies as far out as the
+the roadmaps begin). Its slices are the map's sectors, at their own angles: the map shares the circle between its
+roadmaps and Mathlib (scripts/arxiv_groups.py), so a sector's dividing lines run from the sun to the map's edge, and a
+slice may be empty on either side of zone 0. An item lies as far out as the
 Mathlib definitions it needs (on a logarithmic scale up to the deepest declaration of Mathlib), in its module's wedge
 of the sector, moved a little round that point until it is clear of the items already placed; the landmarks are placed
 first.
@@ -15,57 +15,24 @@ import math
 import zlib
 from collections import Counter, defaultdict
 
-from arxiv_groups import AREA_GAP, FIELD_GAP
+from arxiv_groups import place_area
 
 DISK_INNER, DISK_OUTER = 150, 1120
 # The least distance between two items of one sector, in the map's units.
 SPACING = 6
-# The turn is chosen on a grid of this many degrees.
-TURN_STEP = .1
 # The spiral an item moves out along to find room: how many points it tries, and the golden angle between them.
 SPIRAL = 1200
 GOLDEN_ANGLE = math.pi * (3 - math.sqrt(5))
 
 
-def area_sector(area: str | None, ids: set[str]) -> str | None:
-    """The disk's sector for an item's area: the area when the map has it; else, for a finer area, its category's
-    catch-all area or the category itself; else None."""
-    if not area:
-        return None
-    if area in ids:
-        return area
-    code = area.split("/")[0]
-    return next((sid for sid in (f"{code}/other", code) if sid in ids), None)
-
-
-def _wrap(degrees: float) -> float:
-    return (degrees + 180) % 360 - 180
-
-
 def disk_sectors(counts: dict[str, int], groups: list[dict]) -> list[dict]:
-    """The disk's sectors: one for each of the map's sectors (groups) with items, in the map's order, a share that
-    grows with its items, gaps as on the map; turned so that each lies as near its sector on the map as one turn of
-    the whole allows (the misfit of each weighted by its share). Angles in degrees, clockwise from the right."""
-    ordered = [g for g in sorted(groups, key=lambda g: g["sector"][0]) if counts.get(g["id"], 0) > 0]
-    if not ordered:
-        return []
-    weight = {g["id"]: counts[g["id"]] ** .85 + 1 for g in ordered}
-    gaps = [0.0] + [AREA_GAP if b.get("field") and b.get("field") == a.get("field") else FIELD_GAP for a, b in zip(ordered, ordered[1:])]
-    unit = (360 - sum(gaps) - FIELD_GAP) / sum(weight.values())
-    spans, angle = [], 0.0
-    for gap, g in zip(gaps, ordered):
-        angle += gap
-        spans.append((angle, angle + weight[g["id"]] * unit))
-        angle += weight[g["id"]] * unit
-    centres = [((g["sector"][0] + g["sector"][1]) / 2, (a0 + a1) / 2, weight[g["id"]]) for g, (a0, a1) in zip(ordered, spans)]
-
-    def misfit(turn: float) -> float:
-        return sum(w * _wrap(turn + mine - theirs) ** 2 for theirs, mine, w in centres)
-
-    turn = min((k * TURN_STEP for k in range(int(360 / TURN_STEP))), key=lambda t: (round(misfit(t), 9), t))
+    """The disk's slices: every sector of the map (groups), in its order and at its own angles, with the disk's items
+    in it (none where Mathlib has none), so that the map's dividing lines run on through the disk to the sun. The
+    map's sectors share the circle between the roadmaps and Mathlib (scripts/arxiv_groups.py, sectors)."""
     return [{"id": g["id"], "label": g.get("label") or g["id"], "short": g.get("short") or g.get("label") or g["id"],
              "code": g["id"].split("/")[0], "field": g.get("field"), "color": g.get("color"),
-             "a0": round(a0 + turn, 3), "a1": round(a1 + turn, 3), "items": counts[g["id"]]} for g, (a0, a1) in zip(ordered, spans)]
+             "a0": g["sector"][0], "a1": g["sector"][1], "items": counts.get(g["id"], 0)}
+            for g in sorted(groups, key=lambda g: g["sector"][0])]
 
 
 def radius(needed: int, top: int) -> float:
@@ -136,7 +103,7 @@ def place_items(items: list[dict], sectors: list[dict], top: int) -> None:
 def layout(disk: dict, groups: list[dict]) -> dict:
     """The page's disk: its sectors, its items placed, and the dust by sector."""
     ids = {g["id"] for g in groups}
-    items = [{**item, "sector": area_sector(item["area"], ids)} for item in disk["items"]]
+    items = [{**item, "sector": place_area(item["area"], ids)} for item in disk["items"]]
     items = [item for item in items if item["sector"]]
     counts = Counter(item["sector"] for item in items)
     sectors = disk_sectors(counts, groups)
@@ -145,7 +112,7 @@ def layout(disk: dict, groups: list[dict]) -> dict:
     bins = disk["dust"]["bins"]
     dust: dict[str, list[int]] = {}
     for area, values in disk["dust"]["areas"].items():
-        sid = area_sector(area, ids)
+        sid = place_area(area, ids)
         if sid in counts:
             merged = dust.setdefault(sid, [0] * bins)
             for k, value in enumerate(values):

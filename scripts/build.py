@@ -291,7 +291,9 @@ def build(output: Path, blueprints: Path | None = None, variant: str | None = No
         # The Mathlib disk, round the sun (scripts/disk_layout.py): its areas are on the map even where no roadmap is yet.
         disk = load_disk()
         also = frozenset(area.split("/")[0] for area in (disk or {}).get("areas", {}) if area)
-        atlas["meta"]["arxivGroups"] = group_by_arxiv(atlas, declared, load_arxiv_areas(), json.loads(read_text("data/arxiv-subareas.json")), also=also)
+        # One division for the disk and the map: the sectors share the circle between the roadmaps and Mathlib's items.
+        atlas["meta"]["arxivGroups"] = group_by_arxiv(atlas, declared, load_arxiv_areas(), json.loads(read_text("data/arxiv-subareas.json")), also=also,
+                                                      mathlib={area: entry["items"] for area, entry in disk["areas"].items()} if disk else None)
         if disk:
             atlas["mathlibDisk"] = disk_layout(disk, atlas["groups"])
     retired, link_packets = context["retired"], context["linkPackets"]

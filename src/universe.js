@@ -596,11 +596,14 @@
     // sectors, stronger between categories than between the areas of one.
     let guides = null;
     if (sectored) {
-      const order = populated.slice().sort((a, b) => a.a0 - b.a0), reach = Math.max(...populated.map(g => g.r1));
+      // A rule between every two sectors of the map, those without roadmaps too: an area Mathlib's disk needs has its
+      // sector before its roadmaps come, and the disk's rules run on from these (src/graph.js, drawDisk).
+      const order = galaxies.filter(galaxy => Array.isArray(galaxy.sector)).map(galaxy => ({ code: galaxy.code, a0: galaxy.sector[0] * Math.PI / 180, a1: galaxy.sector[1] * Math.PI / 180 }))
+        .sort((a, b) => a.a0 - b.a0), reach = Math.max(...populated.map(g => g.r1));
       guides = {
-        rules: order.map((galaxy, index) => {
+        rules: order.map((sector, index) => {
           const before = order[(index + order.length - 1) % order.length], end = index ? before.a1 : before.a1 - Math.PI * 2;
-          return { angle: (end + galaxy.a0) / 2, major: !galaxy.fieldId || galaxy.fieldId !== before.fieldId };
+          return { angle: (end + sector.a0) / 2, major: !sector.code || sector.code !== before.code };
         }),
         rings: Array.from({ length: 10 }, (_, index) => ({ distance: index + 1, radius: sectorRadius(index + 1) })).filter(ring => ring.radius <= reach + SECTOR_STEP / 2),
         inner: SECTOR_CORE * .55, outer: reach + 120

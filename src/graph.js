@@ -482,7 +482,7 @@
       const order = disk.sectors.slice().sort((a, b) => a.a0 - b.a0);
       const rules = order.map((s, index) => {
         const before = order[(index + order.length - 1) % order.length], end = index ? before.a1 : before.a1 - Math.PI * 2;
-        return { angle: (end + s.a0) / 2, major: !s.field || s.field !== before.field };
+        return { angle: (end + s.a0) / 2, major: !s.code || s.code !== before.code };
       });
       g.selectAll('line.tau-disk-rule').data(rules).enter().append('line').attr('class', 'tau-disk-rule')
         .attr('x1', d => Math.cos(d.angle) * disk.inner).attr('y1', d => Math.sin(d.angle) * disk.inner)
@@ -563,6 +563,8 @@
       if (!open || this.diskAnimating) return items;
       const chart = this.visibleRect(0), centred = (x, y) => x >= chart.x && x <= chart.x + chart.w && y >= chart.y && y <= chart.y + chart.h;
       disk.sectors.forEach(s => {
+        // A slice Mathlib has nothing in is not named on the disk.
+        if (!s.items) return;
         const middle = (s.a0 + s.a1) / 2;
         if ((s.a1 - s.a0) * disk.outer * .9 * k < (T.small ? 30 : 48)) return;
         const spots = [.95, .88, .8, .7, .6].map(f => ({ x: Math.cos(middle) * disk.outer * f, y: Math.sin(middle) * disk.outer * f + 3.5 / k, above: false, anchor: 'middle' }))
