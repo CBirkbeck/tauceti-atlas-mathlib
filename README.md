@@ -23,8 +23,9 @@ The disk is a first pass. Where Mathlib's folders go (`data/mathlib-areas.json`)
 
 **[Open the experiment](https://cbirkbeck.github.io/tauceti-atlas-mathlib/)** · [Tau Ceti's roadmaps alone](https://cbirkbeck.github.io/tauceti-atlas-mathlib/tauceti/)
 
-The live atlas, its repository ([CBirkbeck/tauceti-explorer](https://github.com/CBirkbeck/tauceti-explorer)) and its scheduled
-refreshes are not changed by anything here.
+Since 26 October 2026 the disk is on the live atlas: tauceti-explorer took it in commit 38daa2a26, with its scheduled
+update making the disk again whenever Tau Ceti's Mathlib commit moves (`scripts/mathlib_refresh.sh` there). This
+repository stays as a place to try the next changes before they go live; nothing here changes the live atlas.
 
 ## How it is built
 
