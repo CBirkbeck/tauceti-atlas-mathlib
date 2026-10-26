@@ -566,10 +566,11 @@
         labels.push({ id: 'disksector:' + s.id, nodeId: s.id, kind: 'disksector', x: spots[0].x, y: spots[0].y, lines: [(s.short || s.label).toUpperCase()],
           font: T.small ? 9 : 10, anchor: 'middle', above: false, priority: 95 + Math.min(20, s.items / 50), active: false, alternatives: spots.slice(1) });
       });
-      items.filter(d => centred(d.x, d.y)).sort((a, b) => (a.id === active ? -1 : b.id === active ? 1 : 0) || a.tier - b.tier || b.importance - a.importance).slice(0, 180).forEach(d => {
+      const chosen = d => d.id === this.selectedId ? 2 : d.id === active ? 1 : 0;
+      items.filter(d => centred(d.x, d.y)).sort((a, b) => chosen(b) - chosen(a) || a.tier - b.tier || b.importance - a.importance).slice(0, 180).forEach(d => {
         const font = d.tier === 1 ? 10.5 : 9.5, gap = 5 / k;
         labels.push({ id: 'mathlib:' + d.id, nodeId: d.id, kind: 'mathlib', landmark: d.tier === 1, x: d.x + gap, y: d.y + 3.5 / k, lines: d.tier === 1 ? wrapText(d.title, 28, 2) : [leanLabel(d.name)], font,
-          anchor: 'start', above: false, priority: (d.tier === 1 ? 30 : 10) + Math.min(9, d.importance) + (active === d.id ? 80 : 0), active: active === d.id,
+          anchor: 'start', above: false, priority: (d.tier === 1 ? 30 : 10) + Math.min(9, d.importance) + 150 * chosen(d), active: active === d.id, chosen: chosen(d) > 0,
           alternatives: [{ x: d.x - gap, y: d.y + 3.5 / k, above: false, anchor: 'end' }, { x: d.x, y: d.y + 14 / k, above: false, anchor: 'middle' },
             { x: d.x, y: d.y - 6 / k, above: true, anchor: 'middle' }] });
       });
@@ -1042,13 +1043,13 @@
       (this.visible ? this.visible.constellations : []).forEach(c => { if (c.resolved) return; const r = Math.max(2.4, Math.min(c.r * k * .9, 2.4 + Math.min(2.4, c.r * k * .1))); solids.push({ owner: c.id, x: c.x * k + t.x, y: c.y * k + t.y, r: r + 1.5 }); });
       if (this.universe && this.universe.core) { const c = this.universe.core; solids.push({ owner: c.id, x: c.x * k + t.x, y: c.y * k + t.y, r: c.r * k * 1.2 + 1 }); }
       // The disk's dots are solid to the names of its items; the disk's own names (Mathlib, its areas) lie over them, as a
-      // galaxy's name lies over its dust.
+      // galaxy's name lies over its dust, and so does the name of the item selected or pointed at, among its neighbours.
       if (this.diskState === 'open') (this.visible && this.visible.disk || []).forEach(d => solids.push({ owner: d.id, disk: true, x: d.x * k + t.x, y: d.y * k + t.y, r: d.tier === 1 ? 4 : 3 }));
       const overlays = this.overlayBoxes();
-      const onSolid = (box, own, kind) => solids.some(s => s.owner !== own && !(s.disk && (kind === 'core' || kind === 'disksector')) && Math.hypot(Math.max(box.x, Math.min(s.x, box.x + box.w)) - s.x, Math.max(box.y, Math.min(s.y, box.y + box.h)) - s.y) < s.r - 1)
+      const onSolid = (box, own, label) => solids.some(s => s.owner !== own && !(s.disk && (label.kind === 'core' || label.kind === 'disksector' || label.chosen)) && Math.hypot(Math.max(box.x, Math.min(s.x, box.x + box.w)) - s.x, Math.max(box.y, Math.min(s.y, box.y + box.h)) - s.y) < s.r - 1)
         || overlays.some(o => Math.min(box.x + box.w, o.x + o.w) - Math.max(box.x, o.x) > 0 && Math.min(box.y + box.h, o.y + o.h) - Math.max(box.y, o.y) > 0);
       const collides = (box, label) => placed.some(other => Math.min(box.x + box.w, other.x + other.w) - Math.max(box.x, other.x) > -2 && Math.min(box.y + box.h, other.y + other.h) - Math.max(box.y, other.y) > -1)
-        || (label.kind === 'galaxy' && onDisc(box, label.nodeId)) || (label.kind === 'field' && onDisc(box, label.members)) || onSolid(box, label.ownerId || label.nodeId, label.kind);
+        || (label.kind === 'galaxy' && onDisc(box, label.nodeId)) || (label.kind === 'field' && onDisc(box, label.members)) || onSolid(box, label.ownerId || label.nodeId, label);
       const byId = new Map(labels.map(label => [label.id, label]));
       // A name is drawn only when the whole of it fits the chart; a clipped
       // name reads as a different name.

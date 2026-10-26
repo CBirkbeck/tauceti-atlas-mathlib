@@ -107,6 +107,17 @@ with sync_playwright() as p:
             record('A landmark\'s name opens its panel: statement, measures, docs and source', panel['item'] and panel['kind'].startswith('Mathlib ')
                    and panel['title'] and panel['signature'] and panel['stats'] == 3 and panel['docs'] and panel['source'] and panel['state'] == 'open')
             after = page.evaluate("() => { const g = TauExplorer.graph, t = g.transform; return [(g.width / 2 - t.x) / t.k, (g.height / 2 - t.y) / t.k]; }")
+            # The selected item keeps its name, among area names and crowded neighbours: the level-one dimension formula
+            # lost its name to the area names round it on 2026-10-26.
+            named = page.evaluate("""() => { const g = TauExplorer.graph, item = g.universe.byId.get('mathlib:ModularForm.dimension_level_one');
+              if (!item) return true;
+              g.options.onSelect(item); const k = g.diskTransform().k * 4.5;
+              g.travel(d3.zoomIdentity.translate(g.width * .45 - item.x * k, g.height / 2 - item.y * k).scale(k), false); return null; }""")
+            settle(page, 900)
+            record('A selected item is named, whatever is round it', named or page.evaluate(
+                "() => !!document.querySelector('.tau-label-mathlib[data-label-for=\\'mathlib:ModularForm.dimension_level_one\\']')"))
+            page.evaluate("() => TauExplorer.graph.zoomToDisk(false)")
+            settle(page)
             record('The panel opening beside the chart keeps the reader\'s place in the disk', abs(after[0] - before[0]) < 2 and abs(after[1] - before[1]) < 2)
             sun = page.evaluate(SUN)
             page.mouse.click(sun[0], sun[1])
