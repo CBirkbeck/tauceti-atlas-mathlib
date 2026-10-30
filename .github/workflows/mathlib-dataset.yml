@@ -2,9 +2,11 @@ name: Mathlib dataset
 
 # Extracts Mathlib's declarations and their dependencies (trust-extract, the extractor the Tau Ceti
 # review site uses) with Mathlib itself as the library, at the commit data/mathlib-pin.json names,
-# and publishes the dataset as the release mathlib-dataset-<commit>. scripts/mathlib_disk.py reads
-# it to place Mathlib's key definitions and theorems on the disk. A push that changes the pin
-# extracts again; a commit already published is not extracted twice.
+# and publishes the dataset as the release mathlib-dataset-<commit>-upstream. scripts/mathlib_disk.py
+# reads it to place Mathlib's key definitions and theorems on the disk. The extraction follows
+# dependencies into Lean and Batteries too (--upstream-closure term), so that the disk can count what
+# Mathlib takes from them: ℕ, ℤ, `%` on ℤ (Int.emod). A push that changes the pin extracts again; a
+# commit already published is not extracted twice.
 on:
   push:
     branches: [main]
@@ -38,7 +40,7 @@ jobs:
           commit="${{ inputs.commit }}"
           [ -n "$commit" ] || commit=$(python3 -c "import json; print(json.load(open('data/mathlib-pin.json'))['mathlib'])")
           echo "COMMIT=$commit" >> "$GITHUB_ENV"
-          echo "TAG=mathlib-dataset-${commit:0:12}" >> "$GITHUB_ENV"
+          echo "TAG=mathlib-dataset-${commit:0:12}-upstream" >> "$GITHUB_ENV"
       - name: Already published?
         id: published
         run: |
@@ -87,7 +89,7 @@ jobs:
         run: |
           sudo sysctl -q -w vm.max_map_count=262144 || true
           lake env "$EXTRACTOR_BIN" extract --root Mathlib --repo leanprover-community/mathlib4 --out "$RUNNER_TEMP/dataset" \
-            --parts 8 --jobs 1 --no-statements --no-upstream-docs
+            --parts 8 --jobs 1 --no-statements --no-upstream-docs --upstream-closure term
           du -sh "$RUNNER_TEMP/dataset"
           python3 -c "import json,sys; m=json.load(open(sys.argv[1])); print({k: m[k] for k in ('spec','producer','modules','library')})" "$RUNNER_TEMP/dataset/meta.json"
       - name: Publish
@@ -96,5 +98,5 @@ jobs:
           tar -C "$RUNNER_TEMP/dataset" -czf "$RUNNER_TEMP/dataset.tar.gz" .
           ls -la "$RUNNER_TEMP/dataset.tar.gz"
           gh release create "$TAG" "$RUNNER_TEMP/dataset.tar.gz" -R "$GITHUB_REPOSITORY" \
-            --title "Mathlib dataset ${COMMIT:0:12}" \
-            --notes "trust-extract $EXTRACTOR_TAG over Mathlib (root \`Mathlib\`) at leanprover-community/mathlib4@$COMMIT."
+            --title "Mathlib dataset ${COMMIT:0:12}, with Lean and Batteries beneath it" \
+            --notes "trust-extract $EXTRACTOR_TAG over Mathlib (root \`Mathlib\`) at leanprover-community/mathlib4@$COMMIT, following dependencies into Lean and Batteries (\`--upstream-closure term\`)."
